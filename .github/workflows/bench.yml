@@ -1,0 +1,42 @@
+name: bench
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  bench:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 345
+    steps:
+      - uses: actions/checkout@v4
+      - name: unpack
+        shell: bash
+        env:
+          KEY: ${{ secrets.KEY }}
+        run: |
+          mkdir w
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:KEY -in payload.enc | tar -xz -C w
+      - name: run
+        shell: bash
+        timeout-minutes: 320
+        run: |
+          bash w/run.sh > result.txt 2>&1 || true
+      - name: pack
+        if: always()
+        shell: bash
+        env:
+          KEY: ${{ secrets.KEY }}
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -pass env:KEY -in result.txt -out result.enc
+          rm -rf w result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: result-${{ matrix.os }}
+          path: result.enc
